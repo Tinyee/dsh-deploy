@@ -20,6 +20,7 @@ cp -f ~/.dsh/update-dsh-windows.ps1   ~/.dsh/test-windows-locally.ps1 "$DIR/scri
 cp -f ~/.dsh/test-linux-locally.sh    "$DIR/scripts/"
 ls -1 "$DIR/scripts/"
 chmod +x "$DIR"/scripts/*.sh 2>/dev/null || true
+chmod +x "$DIR/install.sh" 2>/dev/null || true
 
 echo ""
 echo "=== git 初始化 ==="
