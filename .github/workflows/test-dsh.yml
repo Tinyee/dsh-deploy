@@ -1,0 +1,162 @@
+name: dsh 三平台真机测试
+
+on: [push, workflow_dispatch]
+
+jobs:
+  real-machine:
+    name: ${{ matrix.os }} 真机测试
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # ---------- 0) Linux: 拉起 systemd user 会话（CI 无登录会话，需手动激活）----------
+      - name: 准备 systemd user 会话
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sleep 2
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          for i in $(seq 1 10); do
+            systemctl --user is-system-running >/dev/null 2>&1 && break
+            sleep 1
+          done
+          systemctl --user show-environment || true
+
+      # ---------- 1) 从零引导安装 ----------
+      - name: 从零引导安装 (macOS/Linux)
+        if: runner.os != 'Windows'
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ./scripts/bootstrap-dsh-macos.sh
+          else
+            ./scripts/bootstrap-dsh-linux.sh
+          fi
+      - name: 从零引导安装 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/bootstrap-dsh-windows.ps1
+
+      # ---------- 2) HTTP 服务可用 ----------
+      - name: 验证 HTTP 服务
+        if: runner.os != 'Windows'
+        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3080
+      - name: 验证 HTTP 服务 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: (Invoke-WebRequest http://127.0.0.1:3080 -UseBasicParsing -TimeoutSec 10).StatusCode
+
+      # ---------- 3) 服务注册断言 ----------
+      - name: 断言 launchd 服务已注册运行 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          launchctl print "gui/$(id -u)/com.user.dsh-web" | grep "state = running"
+          launchctl print "gui/$(id -u)/com.user.dsh-update" >/dev/null && echo "每日检查任务已注册 OK"
+      - name: 断言 systemd 服务已注册 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          systemctl --user is-active dsh-web.service
+          systemctl --user is-enabled dsh-web.service
+          systemctl --user is-enabled dsh-update.timer
+          loginctl show-user "$USER" -p Linger
+      - name: 断言 Windows 服务已注册 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-Service dsh-web | Format-Table Name, Status
+          sc.exe qc dsh-web | Select-String "AUTO_START"
+          schtasks /Query /TN dsh-update
+
+      # ---------- 4) 崩溃自动重启（杀进程，等服务管理器拉起）----------
+      - name: 崩溃自动重启 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pid="$(lsof -nP -iTCP:3080 -sTCP:LISTEN -t)"
+          echo "kill -9 $pid"
+          kill -9 "$pid"
+          for i in $(seq 1 20); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080 || true)"
+            [ "$code" = "200" ] && { echo "崩溃后自动重启成功 (第 ${i} 次探测)"; exit 0; }
+            sleep 1
+          done
+          echo "服务未自动重启"; exit 1
+      - name: 崩溃自动重启 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          systemctl --user kill -s SIGKILL dsh-web
+          for i in $(seq 1 20); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080 || true)"
+            [ "$code" = "200" ] && { echo "崩溃后自动重启成功 (第 ${i} 次探测)"; exit 0; }
+            sleep 1
+          done
+          echo "服务未自动重启"; exit 1
+      - name: 崩溃自动重启 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pid = (Get-NetTCPConnection -LocalPort 3080 -State Listen).OwningProcess
+          Stop-Process -Id $pid -Force
+          for ($i = 1; $i -le 20; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $null = Invoke-WebRequest http://127.0.0.1:3080 -UseBasicParsing -TimeoutSec 2
+              Write-Host "崩溃后自动重启成功 (第 ${i} 次探测)"
+              exit 0
+            } catch {}
+          }
+          throw "服务未自动重启"
+
+      # ---------- 5) 升级链路：故意降级 → 自动升回最新 → 服务重启 ----------
+      - name: 升级链路 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd ~/.dsh/runtime && npm install @deepseek-ai/dsh@0.0.1-rc.5
+          v="$(node ~/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --version)"
+          [ "$v" = "0.0.1-rc.5" ] || { echo "降级失败: $v"; exit 1; }
+          ~/.dsh/update-dsh.sh
+          latest="$(npm view @deepseek-ai/dsh version)"
+          v2="$(node ~/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --version)"
+          [ "$v2" = "$latest" ] || { echo "升级后版本不符: $v2 != $latest"; exit 1; }
+          echo "升级链路通过: 0.0.1-rc.5 -> $v2"
+      - name: 升级链路 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd ~/.dsh/runtime && npm install @deepseek-ai/dsh@0.0.1-rc.5
+          v="$(node ~/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --version)"
+          [ "$v" = "0.0.1-rc.5" ] || { echo "降级失败: $v"; exit 1; }
+          ~/.dsh/update-dsh-linux.sh
+          latest="$(npm view @deepseek-ai/dsh version)"
+          v2="$(node ~/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --version)"
+          [ "$v2" = "$latest" ] || { echo "升级后版本不符: $v2 != $latest"; exit 1; }
+          echo "升级链路通过: 0.0.1-rc.5 -> $v2"
+      - name: 升级链路 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Push-Location "$HOME/.dsh/runtime"
+          npm install @deepseek-ai/dsh@0.0.1-rc.5
+          Pop-Location
+          $v = & node "$HOME/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" --version
+          if ($v -ne "0.0.1-rc.5") { throw "降级失败: $v" }
+          & "$HOME/.dsh/update-dsh-windows.ps1"
+          $latest = & npm view @deepseek-ai/dsh version
+          $v2 = & node "$HOME/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" --version
+          if ($v2 -ne $latest) { throw "升级后版本不符: $v2 != $latest" }
+          Write-Host "升级链路通过: 0.0.1-rc.5 -> $v2"
+
+      # ---------- 6) 升级后服务仍正常 ----------
+      - name: 升级后 HTTP 复检
+        if: runner.os != 'Windows'
+        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3080
+      - name: 升级后 HTTP 复检 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: (Invoke-WebRequest http://127.0.0.1:3080 -UseBasicParsing -TimeoutSec 10).StatusCode
