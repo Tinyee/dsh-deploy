@@ -37,7 +37,7 @@ if ($Check) { Log "检测到新版本 $latest（当前 $current），-Check 模�
 # --- 2) 在 runtime 目录里原地安装最新版 ---
 Log "开始升级副本: npm install @deepseek-ai/dsh@$latest"
 Push-Location $RUNTIME
-npm install "@deepseek-ai/dsh@$latest"
+npm install "@deepseek-ai/dsh@$latest" --no-audit
 Pop-Location
 
 # --- 3) 校验安装结果 ---

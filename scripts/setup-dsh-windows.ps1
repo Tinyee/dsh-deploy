@@ -48,7 +48,7 @@ if (-not (Test-Path $bin)) {
         Log "npm 缓存没有，直接从 npm 安装到 $RUNTIME（需要网络）"
         New-Item -ItemType Directory -Force -Path $RUNTIME | Out-Null
         Push-Location $RUNTIME
-        npm install @deepseek-ai/dsh
+        npm install @deepseek-ai/dsh --no-audit
         Pop-Location
     }
     if (-not (Test-Path $bin)) { throw "runtime 副本准备失败" }

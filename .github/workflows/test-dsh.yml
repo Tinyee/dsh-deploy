@@ -6,7 +6,7 @@ jobs:
   real-machine:
     name: ${{ matrix.os }} 真机测试
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +30,18 @@ jobs:
             sleep 1
           done
           systemctl --user show-environment || true
+
+      # ---------- 0.5) Windows: 排除 Defender 实时扫描以加速 npm install ----------
+      - name: 加速 npm install（Defender 排除）(Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $paths = @($env:GITHUB_WORKSPACE, "$HOME\.dsh", $env:RUNNER_TEMP, (npm config get cache))
+          foreach ($p in $paths) {
+            if ($p) { Add-MpPreference -ExclusionPath $p -ErrorAction SilentlyContinue }
+          }
+          Add-MpPreference -ExclusionProcess "node.exe" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionProcess "npm.exe" -ErrorAction SilentlyContinue
 
       # ---------- 1) 从零引导安装（统一入口 install.sh）----------
       - name: 从零引导安装 (macOS/Linux)
@@ -137,7 +149,7 @@ jobs:
         shell: pwsh
         run: |
           Push-Location "$HOME/.dsh/runtime"
-          npm install @deepseek-ai/dsh@0.0.1-rc.5
+          npm install @deepseek-ai/dsh@0.0.1-rc.5 --no-audit
           Pop-Location
           $v = & node "$HOME/.dsh/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" --version
           if ($v -ne "0.0.1-rc.5") { throw "降级失败: $v" }
