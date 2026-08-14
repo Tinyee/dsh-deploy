@@ -18,7 +18,23 @@ jobs:
         with:
           node-version: 22
 
-      # ---------- 0) Linux: 拉起 systemd user 会话（CI 无登录会话，需手动激活）----------
+      # ---------- 0) npm 缓存跨 run 复用（Windows 冷安装一次 ~12min，缓存后基本免下载）----------
+      - name: 读取 npm 最新版本（作为缓存 key）
+        id: ver
+        shell: bash
+        run: echo "latest=$(npm view @deepseek-ai/dsh version 2>/dev/null || echo unknown)" >> "$GITHUB_OUTPUT"
+      - name: 计算 npm 缓存路径
+        id: npmcache
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+      - name: 缓存 npm 缓存目录
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.npmcache.outputs.dir }}
+          key: npm-${{ runner.os }}-${{ steps.ver.outputs.latest }}
+          restore-keys: npm-${{ runner.os }}-
+
+      # ---------- 0.1) Linux: 拉起 systemd user 会话（CI 无登录会话，需手动激活）----------
       - name: 准备 systemd user 会话
         if: runner.os == 'Linux'
         run: |
@@ -31,17 +47,34 @@ jobs:
           done
           systemctl --user show-environment || true
 
-      # ---------- 0.5) Windows: 排除 Defender 实时扫描以加速 npm install ----------
-      - name: 加速 npm install（Defender 排除）(Windows)
+      # ---------- 0.5) Windows: 排除 Defender 实时扫描以加速 npm install（带生效验证）----------
+      - name: 加速 npm install（Defender 排除 + 验证）(Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $paths = @($env:GITHUB_WORKSPACE, "$HOME\.dsh", $env:RUNNER_TEMP, (npm config get cache))
           foreach ($p in $paths) {
-            if ($p) { Add-MpPreference -ExclusionPath $p -ErrorAction SilentlyContinue }
+            if (-not $p) { continue }
+            try {
+              Add-MpPreference -ExclusionPath $p -ErrorAction Stop
+              Write-Host "排除路径 OK: $p"
+            } catch {
+              Write-Host "排除路径失败: $p -> $($_.Exception.Message)"
+            }
           }
-          Add-MpPreference -ExclusionProcess "node.exe" -ErrorAction SilentlyContinue
-          Add-MpPreference -ExclusionProcess "npm.exe" -ErrorAction SilentlyContinue
+          foreach ($proc in @("node.exe", "npm.exe")) {
+            try {
+              Add-MpPreference -ExclusionProcess $proc -ErrorAction Stop
+              Write-Host "排除进程 OK: $proc"
+            } catch {
+              Write-Host "排除进程失败: $proc -> $($_.Exception.Message)"
+            }
+          }
+          $mp = Get-MpPreference
+          Write-Host "--- 生效的 ExclusionPath ---"
+          $mp.ExclusionPath | ForEach-Object { Write-Host "  $_" }
+          Write-Host "--- 生效的 ExclusionProcess ---"
+          $mp.ExclusionProcess | ForEach-Object { Write-Host "  $_" }
 
       # ---------- 1) 从零引导安装（统一入口 install.sh）----------
       - name: 从零引导安装 (macOS/Linux)
