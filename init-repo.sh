@@ -11,6 +11,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=== 同步 ~/.dsh 脚本到 $DIR/scripts ==="
 mkdir -p "$DIR/scripts"
+cp -f ~/.dsh/install.sh "$DIR/install.sh"
 cp -f ~/.dsh/bootstrap-dsh-macos.sh   ~/.dsh/bootstrap-dsh-linux.sh  "$DIR/scripts/"
 cp -f ~/.dsh/setup-dsh-service.sh     ~/.dsh/setup-dsh-linux.sh     "$DIR/scripts/"
 cp -f ~/.dsh/update-dsh.sh            ~/.dsh/update-dsh-linux.sh    "$DIR/scripts/"

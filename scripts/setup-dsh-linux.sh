@@ -46,7 +46,7 @@ if [ ! -f "$BIN" ]; then
         mkdir -p "$RUNTIME"
         cp -R "$SRC/." "$RUNTIME/"
     else
-        log "npx 缓存也没有，直接从 npm 安装到 $RUNTIME（需要网络）"
+        log "npx 缓存也没有，直接从 npm 安装到 ${RUNTIME}（需要网络）"
         mkdir -p "$RUNTIME"
         (cd "$RUNTIME" && npm install @deepseek-ai/dsh)
     fi
@@ -116,7 +116,7 @@ for i in $(seq 1 30); do
         code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT" 2>/dev/null || true)"
         case "$code" in
             2*|3*|4*|5*)
-                log "✅ 完成：systemd 服务已接管端口 $PORT，HTTP $code"
+                log "✅ 完成：systemd 服务已接管端口 ${PORT}，HTTP $code"
                 log "   以后开机自动启动、崩溃自动重启（Restart=always）"
                 break
                 ;;
@@ -129,6 +129,10 @@ done
 # ---------- 8) 每日 10:00 自动升级检查（timer）----------
 if [ "$MODE" != "--no-timer" ]; then
     UPDATE_SCRIPT="$DSH_HOME/update-dsh-linux.sh"
+    if [ ! -f "$UPDATE_SCRIPT" ] && [ -f "$(dirname "$0")/update-dsh-linux.sh" ]; then
+        log "从脚本目录复制升级脚本到 $DSH_HOME/"
+        cp "$(dirname "$0")/update-dsh-linux.sh" "$DSH_HOME/"
+    fi
     if [ -f "$UPDATE_SCRIPT" ]; then
         cat > "$UNIT_DIR/dsh-update.service" <<EOF
 [Unit]
@@ -153,7 +157,7 @@ EOF
         systemctl --user enable --now dsh-update.timer
         log "已启用每日升级检查 timer（每天 10:00，错过补跑）"
     else
-        log "提示：未找到 $UPDATE_SCRIPT，跳过每日升级检查"
+        log "提示：未找到 ${UPDATE_SCRIPT}，跳过每日升级检查"
     fi
 fi
 log "全部完成"

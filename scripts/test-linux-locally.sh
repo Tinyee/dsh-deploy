@@ -30,9 +30,8 @@ rm -rf "$SCRATCH"
 mkdir -p "$SHIM" "$DSH_HOME"
 
 # 预置 runtime 副本（从真实副本复制，跳过 npm 下载，加快测试）
+# 注意: 不预置升级脚本 —— 验证 setup 从自身目录兜底复制的新逻辑
 cp -R /Users/edy/.dsh/runtime "$DSH_HOME/runtime"
-# 预置升级脚本（让 setup 能注册每日检查 timer）
-cp /Users/edy/.dsh/update-dsh-linux.sh "$DSH_HOME/"
 
 # 假 systemctl: 记录调用；enable --now dsh-web.service 时模拟 systemd 拉起服务
 cat > "$SHIM/systemctl" <<'SHIMEOF'
@@ -65,7 +64,7 @@ echo "--- systemd 单元文件（应有 dsh-web.service + dsh-update.service/.ti
 ls "$SCRATCH/.config/systemd/user/"
 echo "--- systemctl 调用记录 ---"
 cat "$SCRATCH/systemctl.log" 2>/dev/null || echo "(无日志)"
-echo "--- 端口 3099 占用（应已被 shim 拉起的进程接管，且不是旧进程 $OLD_PID）---"
+echo "--- 端口 3099 占用（应已被 shim 拉起的进程接管，且不是旧进程 ${OLD_PID}）---"
 lsof -nP -iTCP:3099 -sTCP:LISTEN -t 2>/dev/null | head -1 || true
 echo "--- HTTP 响应 ---"
 curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3099
@@ -82,4 +81,4 @@ echo ""
 echo "=== 7) 清理测试进程 ==="
 pkill -f "DSH_WEB_PORT.*127.0.0.1" 2>/dev/null || true
 pkill -f "http.server" 2>/dev/null || true
-echo "清理完成。隔离目录保留在 $SCRATCH（systemctl.log、unit 文件）供查看"
+echo "清理完成。隔离目录保留在 ${SCRATCH}（systemctl.log、unit 文件）供查看"

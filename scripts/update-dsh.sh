@@ -37,7 +37,7 @@ if [ "$CURRENT" = "$LATEST" ]; then
 fi
 
 if [ "$CHECK_ONLY" = "--check" ]; then
-    log "检测到新版本 $LATEST（当前 $CURRENT），--check 模式跳过升级"
+    log "检测到新版本 ${LATEST}（当前 ${CURRENT}），--check 模式跳过升级"
     exit 0
 fi
 
@@ -48,7 +48,7 @@ log "开始升级副本: npm install @deepseek-ai/dsh@$LATEST"
 # --- 3) 校验安装结果 ---
 NEW="$(node "$BIN" --version 2>/dev/null || echo unknown)"
 if [ "$NEW" != "$LATEST" ]; then
-    log "!! 升级后版本校验失败（期望 $LATEST，实际 $NEW）"
+    log "!! 升级后版本校验失败（期望 ${LATEST}，实际 $NEW）"
     exit 1
 fi
 log "副本升级成功: $CURRENT -> $NEW"

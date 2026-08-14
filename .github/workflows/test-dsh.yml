@@ -31,15 +31,10 @@ jobs:
           done
           systemctl --user show-environment || true
 
-      # ---------- 1) 从零引导安装 ----------
+      # ---------- 1) 从零引导安装（统一入口 install.sh）----------
       - name: 从零引导安装 (macOS/Linux)
         if: runner.os != 'Windows'
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            ./scripts/bootstrap-dsh-macos.sh
-          else
-            ./scripts/bootstrap-dsh-linux.sh
-          fi
+        run: ./install.sh
       - name: 从零引导安装 (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

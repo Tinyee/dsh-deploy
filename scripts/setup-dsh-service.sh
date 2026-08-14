@@ -47,7 +47,7 @@ if [ ! -f "$BIN" ]; then
         mkdir -p "$RUNTIME"
         cp -R "$SRC/." "$RUNTIME/"
     else
-        log "npx 缓存也没有，直接从 npm 安装到 $RUNTIME（需要网络）"
+        log "npx 缓存也没有，直接从 npm 安装到 ${RUNTIME}（需要网络）"
         mkdir -p "$RUNTIME"
         (cd "$RUNTIME" && npm install @deepseek-ai/dsh)
     fi
@@ -150,6 +150,7 @@ fi
 
 # ---------- 8) 等待系统服务接管并验证 ----------
 log "等待 launchd 接管端口 $PORT ..."
+TAKEOVER_OK=false
 for i in $(seq 1 30); do
     NEW_PID="$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '/pid =/{print $3; exit}' || true)"
     if [ -n "$NEW_PID" ]; then
@@ -158,13 +159,72 @@ for i in $(seq 1 30); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT" 2>/dev/null || true)"
             case "$code" in
                 2*|3*|4*|5*)
-                    log "✅ 完成：launchd 服务 (pid $NEW_PID) 已接管端口 $PORT，HTTP $code"
+                    log "✅ 完成：launchd 服务 (pid $NEW_PID) 已接管端口 ${PORT}，HTTP $code"
                     log "   以后开机自动启动、崩溃自动重启，终端可以随便关"
-                    exit 0
+                    TAKEOVER_OK=true
+                    break
                     ;;
             esac
         fi
     fi
     sleep 1
 done
-die "等待超时，请检查: launchctl print gui/$(id -u)/$LABEL"
+if ! $TAKEOVER_OK; then
+    die "等待超时，请检查: launchctl print gui/$(id -u)/$LABEL"
+fi
+
+# ---------- 9) 每日升级检查 LaunchAgent ----------
+UPDATE_LABEL="com.user.dsh-update"
+UPDATE_PLIST="$HOME/Library/LaunchAgents/$UPDATE_LABEL.plist"
+UPDATE_SCRIPT="$DSH_HOME/update-dsh.sh"
+if [ ! -f "$UPDATE_SCRIPT" ] && [ -f "$(dirname "$0")/update-dsh.sh" ]; then
+    log "从脚本目录复制升级脚本到 $DSH_HOME/"
+    cp "$(dirname "$0")/update-dsh.sh" "$DSH_HOME/"
+fi
+if [ -f "$UPDATE_SCRIPT" ]; then
+    cat > "$UPDATE_PLIST.new" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$UPDATE_LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$UPDATE_SCRIPT</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/dev/null</string>
+    <key>StandardErrorPath</key>
+    <string>/dev/null</string>
+</dict>
+</plist>
+EOF
+    plutil -lint "$UPDATE_PLIST.new" >/dev/null 2>&1 || die "生成的升级检查 plist 非法"
+    UP_LOADED=false
+    launchctl print "gui/$(id -u)/$UPDATE_LABEL" >/dev/null 2>&1 && UP_LOADED=true
+    UP_SAME=false
+    [ -f "$UPDATE_PLIST" ] && diff -q "$UPDATE_PLIST" "$UPDATE_PLIST.new" >/dev/null 2>&1 && UP_SAME=true
+    mv "$UPDATE_PLIST.new" "$UPDATE_PLIST"
+    if $UP_LOADED && $UP_SAME; then
+        log "每日升级检查已注册且配置未变"
+    else
+        launchctl bootout "gui/$(id -u)/$UPDATE_LABEL" >/dev/null 2>&1 || true
+        if launchctl bootstrap "gui/$(id -u)" "$UPDATE_PLIST"; then
+            log "已注册每日升级检查（每天 10:00）"
+        else
+            log "!! 升级检查 LaunchAgent 注册失败（不影响主服务）"
+        fi
+    fi
+else
+    log "提示：未找到 ${UPDATE_SCRIPT}，跳过每日升级检查"
+fi
+log "全部完成"

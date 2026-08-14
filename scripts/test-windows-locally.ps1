@@ -28,7 +28,7 @@ Say "=== 0) 准备隔离环境 $SCRATCH ==="
 Remove-Item -Recurse -Force $SCRATCH -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $SHIM, "$env:DSH_HOME/logs" | Out-Null
 Copy-Item -Recurse -Force /Users/edy/.dsh/runtime "$env:DSH_HOME/runtime"
-Copy-Item -Force /Users/edy/.dsh/update-dsh-windows.ps1 "$env:DSH_HOME/"
+# 注意: 不预置升级脚本 —— 验证 setup 从自身目录兜底复制的新逻辑
 
 # ---- 假 nssm：记录调用、假装成功 ----
 $nssmFake = "$SHIM/nssm"

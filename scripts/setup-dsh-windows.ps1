@@ -120,6 +120,13 @@ for ($i = 0; $i -lt 30; $i++) {
 # ---------- 7) 每日 10:00 自动升级检查任务 ----------
 if (-not $NoTimer) {
     $updateScript = Join-Path $DSH_HOME "update-dsh-windows.ps1"
+    if (-not (Test-Path $updateScript)) {
+        $candidate = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "update-dsh-windows.ps1"
+        if (Test-Path $candidate) {
+            Log "从脚本目录复制升级脚本到 $DSH_HOME"
+            Copy-Item $candidate $updateScript -Force
+        }
+    }
     if (Test-Path $updateScript) {
         $uAction  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$updateScript`""
         $uTrigger = New-ScheduledTaskTrigger -Daily -At 10:00AM
