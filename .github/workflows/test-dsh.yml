@@ -97,8 +97,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $pid = (Get-NetTCPConnection -LocalPort 3080 -State Listen).OwningProcess
-          Stop-Process -Id $pid -Force
+          $procId = (Get-NetTCPConnection -LocalPort 3080 -State Listen).OwningProcess
+          Stop-Process -Id $procId -Force
           for ($i = 1; $i -le 20; $i++) {
             Start-Sleep -Seconds 1
             try {
