@@ -26,13 +26,20 @@ jobs:
       - name: 计算 npm 缓存路径
         id: npmcache
         shell: bash
-        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+          echo "dshRuntime=${HOME//\\//}/.dsh/runtime" >> "$GITHUB_OUTPUT"
       - name: 缓存 npm 缓存目录
         uses: actions/cache@v4
         with:
           path: ${{ steps.npmcache.outputs.dir }}
           key: npm-${{ runner.os }}-${{ steps.ver.outputs.latest }}
           restore-keys: npm-${{ runner.os }}-
+      - name: 缓存已安装 runtime（跳过重装）
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.npmcache.outputs.dshRuntime }}
+          key: dsh-runtime-${{ runner.os }}-${{ steps.ver.outputs.latest }}
 
       # ---------- 0.1) Linux: 拉起 systemd user 会话（CI 无登录会话，需手动激活）----------
       - name: 准备 systemd user 会话
