@@ -53,6 +53,17 @@ if [ "$NEW" != "$LATEST" ]; then
 fi
 log "副本升级成功: $CURRENT -> $NEW"
 
+# --- 3.5) 重放本地补丁（升级会覆盖 node_modules 里的本地修改）---
+# 仅本机存在补丁脚本时才执行；无补丁的机器/CI 静默跳过。
+log "重放本地补丁（remote-settings / tailscale-console，如存在）..."
+for patch in patch-remote-settings.js patch-tailscale-console.js; do
+    if [ -f "$DSH_HOME/$patch" ]; then
+        node "$DSH_HOME/$patch" || log "!! $patch 重放失败（代码结构变化？请手动检查）"
+    else
+        log "跳过 $patch（本机未安装）"
+    fi
+done
+
 # --- 4) 重启 launchd 服务（页面断几秒，刷新即可）---
 log "重启 launchd 服务 $LABEL ..."
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
