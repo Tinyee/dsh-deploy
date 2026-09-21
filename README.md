@@ -26,11 +26,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-dsh-windows.ps1
 它做的事：
 
 - **web profile 自动初始化**（首次由 dsh 从随附模板创建）
-- **安装 dshmarket 插件市场**：`dsh plugin --profile web add dshmarket`（幂等）
+- **安装插件**（正式 `dsh plugin` 方式，幂等）：`dshmarket` 插件市场始终安装；其余插件来自 `$DSH_HOME/setup-profile.plugins`（每行一个包名，`#` 注释）或 `EXTRA_PLUGINS` 环境变量。示例见 `scripts/setup-profile.plugins.example`（Tailscale 面板 / 手机端 / DSH Remote 等）
 - **生成 settings.yaml**：仅在文件不存在时从 `settings.yaml.example` 复制，**绝不覆盖已有配置**；复制后记得把 `__GATEWAY_BASE_URL__` 换成你的网关地址（不接自定义网关就删掉 `llm-deepseek` 段）
 - **有实际变更才重启服务**并等待端口恢复，无变更则跳过，不打扰正在运行的服务
 
 > 注：安装入口（install.sh / bootstrap）只负责部署层（runtime + 服务 + 每日升级），不自动写 settings.yaml——自定义网关地址属于你的隐私配置，由你决定是否启用。
+
+> 注：**不再使用 node_modules 补丁（patch-*.js）**。旧方案直接改 DSH 源码，升级后容易失效；插件请一律用 `dsh plugin add` 正式安装（由插件系统管理、升级不丢）。`update-dsh.sh` 检测到遗留的 `patch-*.js` 时只会提示迁移，不会重放。
 
 ## 它做了什么
 

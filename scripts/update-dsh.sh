@@ -53,16 +53,15 @@ if [ "$NEW" != "$LATEST" ]; then
 fi
 log "副本升级成功: $CURRENT -> $NEW"
 
-# --- 3.5) 重放本地补丁（升级会覆盖 node_modules 里的本地修改）---
-# 仅本机存在补丁脚本时才执行；无补丁的机器/CI 静默跳过。
-log "重放本地补丁（remote-settings / tailscale-console，如存在）..."
-for patch in patch-remote-settings.js patch-tailscale-console.js; do
-    if [ -f "$DSH_HOME/$patch" ]; then
-        node "$DSH_HOME/$patch" || log "!! $patch 重放失败（代码结构变化？请手动检查）"
-    else
-        log "跳过 ${patch}（本机未安装）"
-    fi
-done
+# --- 3.5) 检查遗留的 node_modules 补丁（旧方案，已废弃）---
+# 插件已统一改为正式安装（dsh plugin，见 setup-profile.sh 与
+# $DSH_HOME/setup-profile.plugins），不再重放 patch-*.js。
+# 这里只在发现旧补丁文件时提醒迁移，不影响升级流程。
+if ls "$DSH_HOME"/patch-*.js >/dev/null 2>&1; then
+    log "!! 检测到旧补丁文件 $(ls "$DSH_HOME"/patch-*.js 2>/dev/null | xargs -n1 basename | tr '\n' ' ')"
+    log "    旧补丁方案已废弃：请把这些插件改为正式安装（dsh plugin add），"
+    log "    并删除 $DSH_HOME 下的 patch-*.js 文件"
+fi
 
 # --- 4) 重启 launchd 服务（页面断几秒，刷新即可）---
 log "重启 launchd 服务 $LABEL ..."

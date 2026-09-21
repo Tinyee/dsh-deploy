@@ -3,7 +3,8 @@
 # setup-profile.sh — 把 dsh 从"裸官方安装"复现为完整自定义环境:
 #
 #   ① web profile 自动初始化（首次使用时由 dsh 从随附模板创建）
-#   ② 安装 dshmarket 插件市场（幂等: dsh plugin --profile web add dshmarket）
+#   ② 安装插件（正式 dsh plugin 方式）：dshmarket 始终安装，其余插件
+#      来自 $DSH_HOME/setup-profile.plugins（每行一个包名）或 EXTRA_PLUGINS
 #   ③ settings.yaml 不存在时从 settings.yaml.example 生成（绝不覆盖已有配置）
 #   ④ 检测到实际变更时自动重启 dsh-web 服务并等待端口恢复
 #
@@ -14,6 +15,7 @@
 #
 # 环境变量: DSH_HOME 覆盖配置目录（默认 ~/.dsh）
 #           DSH_WEB_PORT 覆盖检查端口（默认 3080）
+#           EXTRA_PLUGINS 追加空格分隔的插件包名
 # ============================================================
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
@@ -22,7 +24,6 @@ DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 RUNTIME="$DSH_HOME/runtime"
 TOOLS="$DSH_HOME/tools"
 BIN="$RUNTIME/node_modules/@deepseek-ai/dsh/lib/bin.js"
-MARKET="dshmarket"
 PORT="${DSH_WEB_PORT:-3080}"
 MODE="${1:-}"
 NO_RESTART=false
@@ -56,12 +57,42 @@ if [ ! -f "$BIN" ]; then
 fi
 VERSION="$("$NODE_BIN" "$BIN" --version 2>/dev/null || echo unknown)"
 
-# ---------- 3) 评估当前状态（只读，不产生任何变更）----------
+# ---------- 3) 读取插件清单（配置驱动）----------
 PROFILE_JSON="$DSH_HOME/profiles/web/package.json"
 SETTINGS="$DSH_HOME/settings.yaml"
 PNPM_BIN="$TOOLS/node_modules/.bin/pnpm"
+PLUGINS_FILE="$DSH_HOME/setup-profile.plugins"
 
-[ -f "$PROFILE_JSON" ] && grep -q '"dshmarket"' "$PROFILE_JSON" 2>/dev/null && MARKET_OK=true || MARKET_OK=false
+# 插件清单：dshmarket（插件市场）始终安装；其余插件来自
+#   · $DSH_HOME/setup-profile.plugins  —— 每行一个包名，# 开头为注释
+#   · EXTRA_PLUGINS 环境变量           —— 空格分隔的包名
+# 例如要装 tailscale 面板 / 手机端，在 setup-profile.plugins 里写:
+#   dsh-tailscale-console
+#   dsh-mobile
+PLUGINS="dshmarket"
+if [ -n "${EXTRA_PLUGINS:-}" ]; then
+    PLUGINS="$PLUGINS $EXTRA_PLUGINS"
+fi
+if [ -f "$PLUGINS_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        line="$(printf '%s' "$line" | xargs)"
+        [ -n "$line" ] && PLUGINS="$PLUGINS $line"
+    done < "$PLUGINS_FILE"
+fi
+# 去重（保持顺序）
+PLUGINS="$(printf '%s' "$PLUGINS" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')"
+
+# 计算缺失插件（只读）
+MISSING=""
+for p in $PLUGINS; do
+    if [ -f "$PROFILE_JSON" ] && grep -q "\"$p\"" "$PROFILE_JSON" 2>/dev/null; then
+        :
+    else
+        MISSING="$MISSING $p"
+    fi
+done
+
 [ -f "$SETTINGS" ] && SETTINGS_OK=true || SETTINGS_OK=false
 [ -x "$PNPM_BIN" ] && PNPM_OK=true || PNPM_OK=false
 
@@ -69,7 +100,8 @@ PNPM_BIN="$TOOLS/node_modules/.bin/pnpm"
 if [ "$MODE" = "--check" ]; then
     echo "runtime    : $RUNTIME (v$VERSION)"
     echo "profile    : $PROFILE_JSON [$([ -f "$PROFILE_JSON" ] && echo 存在 || echo 缺失)]"
-    echo "dshmarket  : [$($MARKET_OK && echo 已安装 || echo 未安装)]"
+    echo "插件清单   :$PLUGINS"
+    echo "缺失插件   :${MISSING:- 无}"
     echo "settings   : $SETTINGS [$($SETTINGS_OK && echo 存在 || echo 缺失)]"
     echo "pnpm       : $($PNPM_OK && echo 就绪 || echo "缺失（将由本脚本安装到 ${TOOLS}）")"
     exit 0
@@ -88,13 +120,15 @@ else
     export PATH="$TOOLS/node_modules/.bin:$PATH"
 fi
 
-# ---------- 6) 安装/确认 dshmarket（幂等）----------
-if $MARKET_OK; then
-    log "profile web 已包含 ${MARKET}，跳过安装"
+# ---------- 6) 安装缺失插件（幂等）----------
+if [ -z "$MISSING" ]; then
+    log "插件全部就绪:$PLUGINS"
 else
-    log "profile web 缺少 ${MARKET}，执行: dsh plugin --profile web add $MARKET"
     export PATH="$TOOLS/node_modules/.bin:$PATH"
-    "$NODE_BIN" "$BIN" plugin --profile web add "$MARKET" || die "安装 $MARKET 失败"
+    for p in $MISSING; do
+        log "安装插件 $p: dsh plugin --profile web add $p"
+        "$NODE_BIN" "$BIN" plugin --profile web add "$p" || die "安装 $p 失败"
+    done
     CHANGED=true
 fi
 
