@@ -241,6 +241,6 @@ if [ ! -f "$DSH_HOME/settings.yaml.example" ] && [ -f "$SCRIPT_DIR/settings.yaml
     cp "$SCRIPT_DIR/settings.yaml.example" "$DSH_HOME/"
 fi
 if [ ! -f "$PROFILE_SCRIPT" ]; then
-    log "提示：未找到 $PROFILE_SCRIPT，需要时请手动放置（或重跑本脚本）"
+    log "提示：未找到 ${PROFILE_SCRIPT}，需要时请手动放置（或重跑本脚本）"
 fi
 log "全部完成"

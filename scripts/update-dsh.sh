@@ -48,7 +48,7 @@ log "开始升级副本: npm install @deepseek-ai/dsh@$LATEST"
 # --- 3) 校验安装结果 ---
 NEW="$(node "$BIN" --version 2>/dev/null || echo unknown)"
 if [ "$NEW" != "$LATEST" ]; then
-    log "!! 升级后版本校验失败（期望 ${LATEST}，实际 $NEW）"
+    log "!! 升级后版本校验失败（期望 ${LATEST}，实际 ${NEW}）"
     exit 1
 fi
 log "副本升级成功: $CURRENT -> $NEW"
@@ -60,7 +60,7 @@ for patch in patch-remote-settings.js patch-tailscale-console.js; do
     if [ -f "$DSH_HOME/$patch" ]; then
         node "$DSH_HOME/$patch" || log "!! $patch 重放失败（代码结构变化？请手动检查）"
     else
-        log "跳过 $patch（本机未安装）"
+        log "跳过 ${patch}（本机未安装）"
     fi
 done
 

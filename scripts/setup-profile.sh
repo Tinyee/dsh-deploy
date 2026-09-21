@@ -71,7 +71,7 @@ if [ "$MODE" = "--check" ]; then
     echo "profile    : $PROFILE_JSON [$([ -f "$PROFILE_JSON" ] && echo 存在 || echo 缺失)]"
     echo "dshmarket  : [$($MARKET_OK && echo 已安装 || echo 未安装)]"
     echo "settings   : $SETTINGS [$($SETTINGS_OK && echo 存在 || echo 缺失)]"
-    echo "pnpm       : $($PNPM_OK && echo 就绪 || echo "缺失（将由本脚本安装到 $TOOLS）")"
+    echo "pnpm       : $($PNPM_OK && echo 就绪 || echo "缺失（将由本脚本安装到 ${TOOLS}）")"
     exit 0
 fi
 
@@ -90,9 +90,9 @@ fi
 
 # ---------- 6) 安装/确认 dshmarket（幂等）----------
 if $MARKET_OK; then
-    log "profile web 已包含 $MARKET，跳过安装"
+    log "profile web 已包含 ${MARKET}，跳过安装"
 else
-    log "profile web 缺少 $MARKET，执行: dsh plugin --profile web add $MARKET"
+    log "profile web 缺少 ${MARKET}，执行: dsh plugin --profile web add $MARKET"
     export PATH="$TOOLS/node_modules/.bin:$PATH"
     "$NODE_BIN" "$BIN" plugin --profile web add "$MARKET" || die "安装 $MARKET 失败"
     CHANGED=true
