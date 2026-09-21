@@ -160,4 +160,20 @@ EOF
         log "提示：未找到 ${UPDATE_SCRIPT}，跳过每日升级检查"
     fi
 fi
+
+# ---------- 9) 部署自定义环境脚本（setup-profile.sh + settings 模板）----------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROFILE_SCRIPT="$DSH_HOME/setup-profile.sh"
+if [ ! -f "$PROFILE_SCRIPT" ] && [ -f "$SCRIPT_DIR/setup-profile.sh" ]; then
+    log "从脚本目录复制 setup-profile.sh 到 $DSH_HOME/"
+    cp "$SCRIPT_DIR/setup-profile.sh" "$DSH_HOME/"
+    chmod +x "$DSH_HOME/setup-profile.sh"
+fi
+if [ ! -f "$DSH_HOME/settings.yaml.example" ] && [ -f "$SCRIPT_DIR/settings.yaml.example" ]; then
+    log "从脚本目录复制 settings.yaml.example 到 $DSH_HOME/"
+    cp "$SCRIPT_DIR/settings.yaml.example" "$DSH_HOME/"
+fi
+if [ ! -f "$PROFILE_SCRIPT" ]; then
+    log "提示：未找到 $PROFILE_SCRIPT，需要时请手动放置（或重跑本脚本）"
+fi
 log "全部完成"

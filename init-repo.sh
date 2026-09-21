@@ -18,6 +18,8 @@ cp -f ~/.dsh/update-dsh.sh            ~/.dsh/update-dsh-linux.sh    "$DIR/script
 cp -f ~/.dsh/bootstrap-dsh-windows.ps1 ~/.dsh/setup-dsh-windows.ps1 "$DIR/scripts/"
 cp -f ~/.dsh/update-dsh-windows.ps1   ~/.dsh/test-windows-locally.ps1 "$DIR/scripts/"
 cp -f ~/.dsh/test-linux-locally.sh    "$DIR/scripts/"
+cp -f ~/.dsh/setup-profile.sh         ~/.dsh/setup-profile.ps1 "$DIR/scripts/"
+cp -f ~/.dsh/settings.yaml.example    "$DIR/scripts/"
 ls -1 "$DIR/scripts/"
 chmod +x "$DIR"/scripts/*.sh 2>/dev/null || true
 chmod +x "$DIR/install.sh" 2>/dev/null || true

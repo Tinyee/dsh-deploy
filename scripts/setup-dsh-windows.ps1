@@ -113,6 +113,11 @@ for ($i = 0; $i -lt 30; $i++) {
         Log "✅ 完成：服务已接管端口 $PORT，HTTP $($r.StatusCode)"
         break
     } catch {
+        # 当前 dsh web 对匿名请求返回 401/404 —— 拿到任何 HTTP 响应都算接管成功
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+            Log "✅ 完成：服务已接管端口 $PORT，HTTP $([int]$_.Exception.Response.StatusCode)"
+            break
+        }
         if ($i -eq 29) { throw "服务未在 30 秒内恢复，请检查服务状态" }
     }
 }
@@ -137,5 +142,22 @@ if (-not $NoTimer) {
     } else {
         Log "提示：未找到 $updateScript，跳过每日升级检查"
     }
+}
+
+# ---------- 8) 部署自定义环境脚本（setup-profile.ps1 + settings 模板）----------
+$profileScript = Join-Path $DSH_HOME "setup-profile.ps1"
+$candidateProfile = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "setup-profile.ps1"
+if (-not (Test-Path $profileScript) -and (Test-Path $candidateProfile)) {
+    Log "从脚本目录复制 setup-profile.ps1 到 $DSH_HOME"
+    Copy-Item $candidateProfile $profileScript -Force
+}
+$settingsExample = Join-Path $DSH_HOME "settings.yaml.example"
+$candidateSettings = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "settings.yaml.example"
+if (-not (Test-Path $settingsExample) -and (Test-Path $candidateSettings)) {
+    Log "从脚本目录复制 settings.yaml.example 到 $DSH_HOME"
+    Copy-Item $candidateSettings $settingsExample -Force
+}
+if (-not (Test-Path $profileScript)) {
+    Log "提示：未找到 $profileScript，需要时请手动放置（或重跑本脚本）"
 }
 Log "全部完成"

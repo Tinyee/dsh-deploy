@@ -55,14 +55,19 @@ if ($nssm) {
     Restart-ScheduledTask -TaskName $SVC
 }
 
-# --- 5) 等待端口恢复 ---
+# --- 5) 等待端口恢复（任何 HTTP 响应都算恢复：当前 dsh web 对匿名请求返回 401/404）---
 for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep -Seconds 1
     try {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:$PORT" -UseBasicParsing -TimeoutSec 2
         Log "服务已恢复 (HTTP $($r.StatusCode))"
         exit 0
-    } catch {}
+    } catch {
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+            Log "服务已恢复 (HTTP $([int]$_.Exception.Response.StatusCode))"
+            exit 0
+        }
+    }
 }
 Log "!! 服务未在 30 秒内恢复，请检查服务状态"
 exit 1

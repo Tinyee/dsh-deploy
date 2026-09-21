@@ -1,0 +1,33 @@
+# ============================================================
+# settings.yaml 模板 —— 由 scripts/setup-profile.sh 在首次安装时
+# 复制为 $DSH_HOME/settings.yaml（仅在文件不存在时写入，绝不覆盖已有配置）
+#
+# 必做：把 __GATEWAY_BASE_URL__ 换成你自己的网关地址。
+# 不接自定义网关时：删掉整个 llm-deepseek 段，并把
+# agent-default-model 改回官方模型即可。
+# ============================================================
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+llm-deepseek:
+  baseURL: https://__GATEWAY_BASE_URL__
+  models:
+    - id: deepseek-v4-flash
+      contextWindow: 1000000
+      inputModalities:
+        - text
+        - image
+      imagePixelBudget: 640000
+      imageMaxBytes: 1048576
+      systemPromptUpdate: in-history
+      name: DeepSeek-V41-Flash
+    - id: deepseek-v4-pro
+      name: DeepSeek-V4-Pro
+      description: Stronger agentic coding, knowledge, and difficult reasoning; suited
+        to complex or quality-critical tasks at higher cost.
+      contextWindow: 1000000
+      inputModalities:
+        - text
+agent-default-model:
+  provider: deepseek-official
+  model: deepseek-v4-flash
+  reasoningEffort: high
